@@ -1,3 +1,4 @@
+
 var express = require('express');  
 var bodyParser = require("body-parser");
 var app = express();  
@@ -11,7 +12,7 @@ var onlinePlayers = [];
 var online = false;
 const fs = require('fs');
 
-const version = "0.0";
+const version = "0.3";
 
 process.argv.forEach(function (val, index, array) {
   console.log(index + ': ' + val);
