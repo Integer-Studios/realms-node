@@ -7,19 +7,24 @@ var io = require('socket.io')(server);
 var httpPort = 4202;
 var socketPort = 4201;
 var debug = false;
+var databaseName = "polytechnica";
 
 var onlinePlayers = [];
 var online = false;
+var currentServer = false;
+var currentConnection = false;
+
 const fs = require('fs');
 
-const version = "0.3";
+const version = "0.0";
 
 process.argv.forEach(function (val, index, array) {
-  console.log(index + ': ' + val);
-  if (index == 0 && val == "-debug") {
+  if ((index == 2 || index == 3) && val == "-debug") {
 	  debug = true;
 	  httpPort = 4204;
 	  socketPort = 4203;
+	  databaseName = "polytechnica_dev";
+	  console.log("Debug Mode Selected!");
   }
 });
 
@@ -63,6 +68,23 @@ app.post('/playerOnline',function(request,response){
 
 });
 
+app.post('/players',function(request,response){
+	if (online && currentConnection !== false) {
+		if (onlinePlayers.length > 0) {
+		currentConnection.query('SELECT *  FROM `player` WHERE `id` IN (' + onlinePlayers.join() + ')', function(err, results) {
+			if (err) throw err;
+			
+			response.send(results);
+		});	
+		} else {
+			response.send({});
+		}
+	} else {
+		response.send(false);
+	}	
+
+});
+
 app.post('/online',function(request,response){
 	if (online) {
 		response.send(true);	
@@ -83,8 +105,20 @@ app.post('/version',function(request,response){
 
 });
 
+app.post('/say',function(request,response){
+	
+	if (currentServer !== false) {
+		currentServer.emit("receiveCommand", {message: request.body.message});
+		response.send(true);
+	} else {
+		response.send(false);
+	}
+
+});
+
+
 app.listen(httpPort,function(){
-  console.log("Started on PORT 4202");
+  console.log("Started on PORT " + httpPort);
 });
 
 server.listen(socketPort);  
@@ -117,7 +151,7 @@ var connection = mysql.createConnection({
   host: 'integer-studios.c4vv4wqp7uro.us-west-2.rds.amazonaws.com',
   user: 'intstudios',
   password: 'wareVoid123I',
-  database: 'polytechnica'
+  database: databaseName
 });
 
 function onPlayerLogin(playerID) {
@@ -229,6 +263,7 @@ function saveScripts(object, isPlayer) {
 						connection.query("INSERT INTO `inventory-slot` VALUES('"+invID+"', '"+slot.id+"', '"+slot.item+"', '"+slot.quality+"', '"+slot.size+"')", function(err, results){});
 						
 					}
+					connection.query("DELETE FROM `inventory-slot` WHERE `inventory` NOT IN (SELECT `id` FROM `inventory`)", function(err, results){});
 				});
 		};
 		var scripts = object['scripts'];
@@ -281,7 +316,7 @@ connection.connect(function(err) {
 	if (err) throw err
         
 		console.log('MySQL Connected...')
-				
+		currentConnection = connection;		
 		
 		io.on('connection', function(client) {  
 // 			if (online) 
@@ -291,7 +326,7 @@ connection.connect(function(err) {
 			online = true;
 			onlinePlayers = [];
 		    console.log('Game Server connected...');
-			
+			currentServer = client;
 			client.on('spawn', function(data) {
 		        spawn = data;
 		    });
@@ -352,6 +387,7 @@ connection.connect(function(err) {
 							}
 							
 							playerData["scripts"] = inventories;
+
 					        client.emit('playerLogin', playerData);
 				        });
 			        }
